@@ -4,15 +4,24 @@ defmodule Mix.Tasks.Gettext.SchemaFields do
   @shortdoc "Generates a POT file for schema fields"
 
   @default_file_name "schema"
+  @switches [ectoapp: :string]
 
-  def run(_args) do
+  def run(args) do
     force_compile()
 
     mix_config = Mix.Project.config()
 
+    {opts, _} = OptionParser.parse!(args, switches: @switches)
+
+    ecto_app = case Keyword.get(opts, :ectoapp)  do
+      nil -> mix_config[:app]
+      val -> String.to_atom(val)
+    end
+
+    {:ok, _} = Application.ensure_all_started(ecto_app)
     {:ok, _} = Application.ensure_all_started(mix_config[:app])
 
-    {:ok, modules} = :application.get_key(mix_config[:app], :modules)
+    {:ok, modules} = :application.get_key(ecto_app, :modules)
 
     file_path = Path.absname("priv/gettext/#{Application.get_env(mix_config[:app], :gettext_schema_file_name) || @default_file_name}.pot", File.cwd!)
 
@@ -31,7 +40,7 @@ defmodule Mix.Tasks.Gettext.SchemaFields do
     Mix.Task.run("compile")
     Mix.Task.run("compile.elixir")
   end
-  
+
   defp extract_fields_from_module(module, file_path) do
     case Keyword.fetch(module.__info__(:functions), :__schema__) do
       {:ok, _} ->
@@ -45,7 +54,7 @@ defmodule Mix.Tasks.Gettext.SchemaFields do
     File.write!(file_path, "# #{sanitized_module_name("#{module}")}\n", [:append])
 
     Enum.each(module.__schema__(:fields), &write_field_to_pot_file(&1, module, file_path))
-    
+
     File.write!(file_path, "\n", [:append])
   end
 
